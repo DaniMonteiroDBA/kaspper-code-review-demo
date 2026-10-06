@@ -1,0 +1,45 @@
+name: Alerta seletivo da revisao nativa
+on:
+  issue_comment:
+    types: [created, edited]
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/review/native_alert.py'
+      - '.github/workflows/native-alert.yml'
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+concurrency:
+  group: kaspper-native-alert
+  cancel-in-progress: false
+jobs:
+  alert:
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.comment.user.id == 199175422 && github.event.comment.user.login == 'chatgpt-codex-connector[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Testar adaptador sem enviar
+        run: python3 -m unittest discover -s .github/review -p 'test_native_alert.py' -v
+      - name: Consumir achados e enviar somente quando necessario
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+        run: python3 .github/review/native_alert.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-alert-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-alert-result.json
+          if-no-files-found: warn
+          retention-days: 90
