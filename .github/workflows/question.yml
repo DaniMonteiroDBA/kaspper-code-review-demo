@@ -1,7 +1,7 @@
 name: Perguntar sobre o PR
+# Fluxo API pausado: ensaio atual usa integração nativa do Codex.
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
