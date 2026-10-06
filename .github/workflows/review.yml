@@ -1,0 +1,122 @@
+name: Revisao automatica Kaspper
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+concurrency:
+  group: review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - run: |
+          cp trusted/test_orders.py candidate/test_orders.py
+          cd candidate
+          python3 -m unittest -v
+  codex:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - run: cp trusted/AGENTS.md AGENTS.md
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: trusted/.github/review/prompt.md
+          codex-args: '["--output-schema", "trusted/.github/review/schema.json"]'
+          sandbox: read-only
+          output-file: review.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-${{ github.event.pull_request.head.sha }}
+          path: review.json
+          if-no-files-found: warn
+          retention-days: 30
+  document:
+    needs: [contracts, codex]
+    if: always() && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      CI_RESULT: ${{ needs.contracts.result }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: review-${{ github.event.pull_request.head.sha }}
+      - id: result
+        run: python3 .github/review/process.py
+      - id: publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const number = context.payload.pull_request.number;
+            const pr = (await github.rest.pulls.get({...context.repo, pull_number:number})).data;
+            if (pr.head.sha !== process.env.HEAD_SHA) {
+              core.setOutput('current','false');
+              core.warning('Resultado antigo: novo commit detectado.');
+              return;
+            }
+            core.setOutput('current','true');
+            await github.rest.issues.createComment({...context.repo,issue_number:number,body:fs.readFileSync('review.md','utf8')});
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: |
+            review.json
+            review.md
+          retention-days: 90
+      - name: Email de alerta
+        if: steps.result.outputs.alert == 'true' && steps.publish.outputs.current == 'true'
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          REVIEW_STATE: ${{ steps.result.outputs.state }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/review/email_alert.py
+      - name: Gate da revisao
+        if: steps.result.outputs.state != 'CONCLUIDO_SEM_ESCALONAMENTO' || steps.publish.outputs.current != 'true'
+        run: exit 1
