@@ -1,7 +1,7 @@
 name: Revisao automatica Kaspper
+# Fluxo API pausado: ensaio atual usa integração nativa do Codex.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -46,7 +46,9 @@ jobs:
           path: candidate
           fetch-depth: 0
           persist-credentials: false
-      - run: cp trusted/AGENTS.md AGENTS.md
+      - run: |
+          git init
+          cp trusted/AGENTS.md AGENTS.md
       - uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
