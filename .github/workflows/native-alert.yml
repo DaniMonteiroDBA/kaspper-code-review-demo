@@ -12,7 +12,7 @@ on:
     - cron: '*/15 * * * *'
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   issues: write
 concurrency:
   group: kaspper-native-alert

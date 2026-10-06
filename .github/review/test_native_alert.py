@@ -82,6 +82,15 @@ class DeliveryTests(unittest.TestCase):
   with patch.object(n,'send_alert',side_effect=ValueError('no SMTP')):
    r=n.run(gh,{},'schedule');self.assertIn('PENDENTE',r[0]['mail'])
    self.assertNotIn('SMTP_ACEITO',gh.posts[0]['body'])
+ def test_forbidden_audit_prevents_email(self):
+  gh=FakeGH(); original=gh.request
+  def request(path,data=None):
+   if data is not None: raise n.HTTPError('https://api.github.com',403,'Forbidden',{},None)
+   return original(path,data)
+  gh.request=request
+  with patch.object(n,'send_alert') as send:
+   result=n.run(gh,{},'schedule')
+   self.assertEqual(result[0]['mail'],'BLOQUEADO_REGISTRO_GITHUB');send.assert_not_called()
  def test_event_human_ignored(self):
   gh=FakeGH()
   self.assertEqual(n.run(gh,{'comment':{'user':{'login':'human','id':1}},'issue':{'number':1,'pull_request':{}}},'issue_comment'),[])

@@ -3,6 +3,7 @@ import hashlib, json, os, re, smtplib, ssl
 from pathlib import Path
 from email.message import EmailMessage
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 BOT_LOGIN = "chatgpt-codex-connector[bot]"
 BOT_ID = 199175422
@@ -130,19 +131,30 @@ def run(gh, event, event_name):
             result["mail"] = "DESCARTADO_NOVO_HEAD"
             continue
         if needs_mail:
+            # Comprova escrita do recibo antes do envio externo.
+            if not has_receipt(comments,marker,"PENDENTE"):
+                try:
+                    gh.request(f"/issues/{number}/comments",{"body":marker+
+                        f"\n## Alerta da revisão nativa\nCommit: {head}\nResultado: {state}"
+                        "\nEstado de envio: PENDENTE\nEnvio ainda não confirmado."})
+                except HTTPError as exc:
+                    result["mail"]="BLOQUEADO_REGISTRO_GITHUB"
+                    result["record_error"]=f"GitHub HTTP {exc.code}"
+                    continue
             try: send_alert(number,head,state,findings)
             except (ValueError, OSError, smtplib.SMTPException, RuntimeError):
                 result["mail"] = "PENDENTE_CONFIGURACAO_OU_FALHA_SMTP"
-                if not has_receipt(comments,marker,"PENDENTE"):
-                    gh.request(f"/issues/{number}/comments",{"body":marker+
-                        f"\n## Alerta da revisão nativa\nCommit: {head}\nResultado: {state}"
-                        "\nEstado de envio: PENDENTE\nE-mail não confirmado. Verifique o remetente SMTP."})
                 continue
-        gh.request(f"/issues/{number}/comments", {"body":marker+
+        try:
+            gh.request(f"/issues/{number}/comments", {"body":marker+
             f"\n## Registro da revisão nativa\nCommit: {head}\nResultado: {state}"
             f"\nEstado de envio: {final_status}"
             f"\nDestinatário: {RECIPIENT if needs_mail else 'não acionado'}"
             "\nSMTP_ACEITO é aceite pelo servidor, não confirmação de recebimento na caixa."})
+        except HTTPError as exc:
+            result["mail"]="BLOQUEADO_REGISTRO_GITHUB"
+            result["record_error"]=f"GitHub HTTP {exc.code}"
+            continue
         result["mail"] = final_status
     return results
 
@@ -154,6 +166,6 @@ def main():
     with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as summary:
         summary.write("## Revisão nativa — encaminhamento\n\n")
         for r in results: summary.write(f'- PR #{r["pr"]}: {r["state"]}; envio: {r.get("mail","aguardando")}.\n')
-    if any(r.get("mail") == "PENDENTE_CONFIGURACAO_OU_FALHA_SMTP" for r in results):
-        raise SystemExit("Alerta pendente: configure SMTP. Nenhuma entrega confirmada.")
+    if any(r.get("mail") in ["PENDENTE_CONFIGURACAO_OU_FALHA_SMTP","BLOQUEADO_REGISTRO_GITHUB"] for r in results):
+        raise SystemExit("Alerta ou registro pendente: verifique SMTP/permissão de comentário. Entrega não confirmada.")
 if __name__ == "__main__": main()
