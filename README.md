@@ -1,34 +1,39 @@
-# Kaspper — revisão automática no GitHub
-Laboratório privado, Python com dados sintéticos. Sem merge automático.
-PR pronto no mesmo repositório → contratos do baseline + Codex → relatório no PR e artefatos. Sem defeito material e com verificações completas, conclui sem review humano. Defeito P0/P1/P2 ou resultado inconclusivo envia alerta para danibruxinha@gmail.com.
+# Kaspper — Code Review sem chave API
+
+Ensaio privado, código Python e dados sintéticos. O caminho atual é a integração nativa Codex ↔ GitHub, usando o acesso e os limites disponíveis no plano ChatGPT. Não exige OPENAI_API_KEY.
+
 ## Ativar
-Settings → Secrets and variables → Actions → New repository secret:
-- OPENAI_API_KEY: chave API OpenAI; cobrança separada do ChatGPT. Defina limite de gasto no projeto API.
-- SMTP_USERNAME: endereço da conta remetente.
-- SMTP_PASSWORD: credencial SMTP (Gmail: senha de aplicativo, se disponível).
-Variável opcional SMTP_HOST; padrão smtp.gmail.com, porta 587 STARTTLS.
-Nunca envie chaves/senhas pelo chat nem as coloque no código. Este pacote não cadastrou credenciais.
-## Demonstrar
-Torne cada PR draft pronto com Ready for review, um por vez:
-- Limpo: renomeia variável corretamente.
-- P1: remove isolamento entre clientes.
-- P2: aceita page=0 quebrando contrato.
-- P0: esvazia migração; P0 pressupõe substituição integral dos registros.
-Confira Actions → jobs contracts, codex e document; abra o comentário no PR. No caso com erro, confirme também o recebimento do e-mail.
-## Perguntas do time
-No comentário do PR: /review-question Por que esta alteração pode gerar bug? Cite o cenário e as linhas.
-Colaboradores com escrita/admin podem perguntar; o Codex consulta o diff e responde no PR. Cada pergunta usa a API. Workflow de perguntas precisa estar em main.
-## Limites
-Critérios em AGENTS.md são propostas do ensaio. P2 também pode ser bug. Não há garantia de detecção ou prioridade exata. Mudanças fora de orders.py são inconclusivas nesta versão.
-Contratos do baseline não podem ser relaxados pelo PR. Job de testes não recebe OpenAI/SMTP nem token de escrita. Codex lê candidato sem executar código, em sandbox read-only. Documentação e SMTP ficam em job separado com código do baseline.
-Novo commit antes da publicação invalida resultado antigo. Reexecuções intencionais podem gerar novo comentário e e-mail; não há garantia de entrega exactly-once.
-Relatórios JSON/MD ficam como artefatos 90 dias; comentários permanecem no PR. Para auditoria corporativa, integrar destino durável oficial.
-Sem credenciais, revisão não roda corretamente e envio não é realizado; isso não é tratado como aprovação. Aceite SMTP não comprova entrega na caixa.
-Gate document fica vermelho para defeito/inconclusivo. Configure proteção de main exigindo o check se quiser bloquear merge; as proteções não são criadas pelo código.
-## Validação
-python3 -m unittest -v
-python3 -m unittest discover -s .github/review -p 'test_*.py' -v
-Validação local em docs/VALIDACAO.md. API, email e conversa ainda precisam de validação ponta a ponta após secrets.
-## Fontes
-https://learn.chatgpt.com/docs/github-action
+1. Abra o Codex e suas configurações de revisão de código.
+2. Conecte/autorize este repositório na integração Codex, se não aparecer. O acesso do conector deste chat não comprova habilitação do serviço de review.
+3. Habilite Automatic review / Review code para DaniMonteiroDBA/kaspper-code-review-demo e configure as preferências/gatilhos.
+4. Abra o PR #1 e clique Ready for review. Confirme que o Codex realmente reage e publica resultado.
+5. Para teste manual, comente @codex review no PR.
+
+## Cenários
+- PR #1: alteração limpa.
+- PR #2: isolamento entre clientes.
+- PR #3: paginação — P2 esperado no relatório local; pode não aparecer na revisão nativa do GitHub, que documenta somente P0/P1.
+- PR #4: perda de registros sob a hipótese de substituição integral do conjunto persistido.
+
+AGENTS.md contém critérios propostos. Os PRs são rascunhos, não fazer merge. Ausência de comentários não significa que revisão rodou ou que não há defeitos.
+
+## Perguntas
+Abra o PR no Code Review do aplicativo ChatGPT/Codex e faça perguntas no chat associado. Não use /review-question: esse comando pertencia ao workflow com API e está pausado. @codex com texto diferente de review inicia outra tarefa na integração; não presumir que toda pergunta tem o mesmo comportamento da revisão nativa.
+
+## O que falta comprovar
+- Ativação e execução do review nativo na sua conta.
+- Formato de resultado da mudança limpa e documentação disponível.
+- Encaminhamento sem revisão humana conforme política da fábrica.
+- E-mail seletivo para danibruxinha@gmail.com.
+
+Notificações comuns do GitHub não equivalem ao alerta seletivo por defeito. Um adaptador pode enviar SMTP a partir de achados do bot sem chamar a API OpenAI; requer identificar o evento/resultado real e configurar remetente. Destinatário não é credencial de envio. Não há envio seletivo ativo nesta versão.
+
+## Fluxos anteriores
+review.yml e question.yml dependem de API e tiveram gatilhos automáticos removidos. Estão preservados somente como referência com execução manual; não acioná-los neste ensaio. Scripts de SMTP/normalização permanecem como candidatos não integrados à revisão nativa. Não cadastrar chave API para o caminho atual.
+
+## Evidências
+10 testes baseline e 5 de decisão passaram localmente; SMTP foi simulado, nenhum e-mail enviado. Um workflow real do PR draft foi reconhecido e skipped. Não confundir esses resultados com revisão nativa já executada.
+
+## Fontes oficiais
+https://learn.chatgpt.com/docs/third-party/github
 https://learn.chatgpt.com/docs/code-review
