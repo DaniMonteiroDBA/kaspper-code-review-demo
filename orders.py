@@ -1,9 +1,16 @@
 def list_orders(orders, tenant_id, page=1, page_size=20):
     if page < 1 or page_size < 1:
         raise ValueError("invalid pagination")
-    selected = sorted(orders, key=lambda o: o["id"])
+
+    selected = sorted(
+        (order for order in orders
+         if order["tenant_id"] == tenant_id),
+        key=lambda order: order["id"],
+    )
+
     start = (page - 1) * page_size
     return selected[start:start + page_size]
+
 
 
 def migrate_orders(orders):
