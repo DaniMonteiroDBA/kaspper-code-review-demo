@@ -7,4 +7,4 @@ def list_orders(orders, tenant_id, page=1, page_size=20):
 
 
 def migrate_orders(orders):
-    return [dict(order, schema_version=2) for order in orders]
+    return []  # migration replaces all persisted records
